@@ -5,7 +5,7 @@ import Confetti from 'react-confetti'
 
 
 // Connexion au serveur WebSocket
-const socket = io("http://localhost:8080");
+const socket = io();
 
 function App() {
   const [roomCode, setRoomCode] = useState(null);
