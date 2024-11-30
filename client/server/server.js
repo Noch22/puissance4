@@ -13,11 +13,11 @@ const io = new Server(server, {
   },
 });
 
-app.use(express.static(path.join(__dirname, 'dist')));
+app.use(express.static(path.join(__dirname, '../dist')));
 
 // Pour toute route non gérée, retourner l'index.html de Vite
 app.get('*', (req, res) => {
-  res.sendFile(path.join(__dirname, 'dist', 'index.html'));
+  res.sendFile(path.join(__dirname, '../dist', 'index.html'));
 });
 
 // Port d'écoute du serveur
