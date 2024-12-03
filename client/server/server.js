@@ -6,13 +6,17 @@ const path = require("path");
 // Création du serveur Express
 const app = express();
 const server = http.createServer(app);
-const io = new Server(server);
+const io = new Server(server, {
+  // cors: {
+  //   origin: "http://localhost:5173",
+  // },
+});
 
-app.use(express.static(path.join(__dirname, '../dist')));
+app.use(express.static(path.join(__dirname, "../dist")));
 
 // Pour toute route non gérée, retourner l'index.html de Vite
-app.get('*', (req, res) => {
-  res.sendFile(path.join(__dirname, '../dist', 'index.html'));
+app.get("*", (req, res) => {
+  res.sendFile(path.join(__dirname, "../dist", "index.html"));
 });
 
 // Port d'écoute du serveur
@@ -29,7 +33,11 @@ const initialGameState = Array(6).fill(null).map(() => Array(7).fill(null));
 function nextPlayer(roomCode) {
   const room = rooms[roomCode];
   if (!room) return;
-  room.currentPlayer = room.currentPlayer === room.players[0] ? room.players[1] : room.players[0];
+
+  room.currentPlayer =
+    room.currentPlayer.id === room.players[0].id
+      ? room.players[1]
+      : room.players[0];
   io.to(roomCode).emit("TURN", { currentPlayer: room.currentPlayer });
 }
 
@@ -74,39 +82,45 @@ function checkWinner(gameState) {
 
 // Gestion des connexions WebSocket
 io.on("connection", (socket) => {
-  console.log("Un joueur est connecté :", socket.id);
+  console.log(`[INFO] Un joueur est connecté : ${socket.id}`);
 
   socket.on("SEND_MESSAGE", (roomCode, message) => {
     io.to(roomCode).emit("NEW_MESSAGE", { message: message });
   });
 
-
   // Création d'une room
-  socket.on("CREATE_ROOM", () => {
+  socket.on("CREATE_ROOM", (username) => {
     const roomCode = generateRoomCode();
     rooms[roomCode] = {
-      players: [socket.id],
-      gameState: initialGameState.map(row => [...row]), // Copie de l'état initial
-      currentPlayer: socket.id, // Le créateur de la room commence
+      players: [
+        {
+          id: socket.id,
+          username: username,
+        },
+      ],
+      gameState: JSON.parse(JSON.stringify(initialGameState)),
+      currentPlayer: { id: socket.id, username: username },
     };
     socket.join(roomCode);
     socket.emit("ROOM_CREATED", { roomCode });
   });
 
   // Rejoindre une room
-  socket.on("JOIN_ROOM", (roomCode) => {
+  socket.on("JOIN_ROOM", (roomCode, username) => {
     const room = rooms[roomCode];
     if (room && room.players.length < 2) {
-      room.players.push(socket.id);
+      room.players.push({
+        id: socket.id,
+        username: username,
+      });
       socket.join(roomCode);
 
-      // Envoyer la couleur du joueur
-      const playerColor = room.players[0] === socket.id ? "yellow" : "red";
+      const playerColor = room.players[0].id === socket.id ? "yellow" : "red";
       socket.emit("PLAYER_COLOR", { color: playerColor });
-      console.log("Joueur", socket.id, "a rejoint la room", roomCode, "avec la couleur", playerColor);
 
       io.to(roomCode).emit("PLAYER_JOINED", {
         message: `Un joueur a rejoint la room !`,
+        color: playerColor,
       });
 
       if (room.players.length === 2) {
@@ -115,40 +129,36 @@ io.on("connection", (socket) => {
         });
       }
     } else {
-      socket.emit("PLAYER_JOINED", { message: "La room est pleine ou inexistante." });
+      socket.emit("PLAYER_JOINED", {
+        message: "La room est pleine ou inexistante.",
+      });
     }
   });
 
   // Démarrer la partie
   socket.on("START_GAME", (roomCode) => {
     const room = rooms[roomCode];
-    if (room && room.players[0] === socket.id) {
+    if (room && room.players[0].id === socket.id) {
       io.to(roomCode).emit("GAME_STARTED", { message: "La partie commence !" });
       io.to(roomCode).emit("TURN", { currentPlayer: room.currentPlayer });
-      console.log("tour de :", room.currentPlayer);
     }
   });
 
   // Gestion des coups joués
   socket.on("PLAY_MOVE", ({ roomCode, col }) => {
-    console.log("PLAY_MOVE", roomCode, col);
     const room = rooms[roomCode];
-    console.log(socket.id, "a joué", col);
-    if (!room || !room.players.includes(socket.id)) {
+    if (!room || !room.players.some((player) => player.id === socket.id)) {
       socket.emit("MOVE_ERROR", { message: "Vous n'êtes pas dans cette room." });
       return;
     }
 
-    // Vérifier que c'est bien le tour du joueur
-    if (room.currentPlayer !== socket.id) {
+    if (room.currentPlayer.id !== socket.id) {
       socket.emit("MOVE_ERROR", { message: "Ce n'est pas votre tour." });
       return;
     }
 
-    // Identifier la couleur du joueur
-    const playerColor = room.players[0] === socket.id ? "yellow" : "red";
+    const playerColor = room.players[0].id === socket.id ? "yellow" : "red";
 
-    // Trouver la première ligne vide en partant du bas
     let row = -1;
     for (let r = room.gameState.length - 1; r >= 0; r--) {
       if (room.gameState[r][col] === null) {
@@ -157,39 +167,32 @@ io.on("connection", (socket) => {
       }
     }
 
-    // Si la colonne est pleine
     if (row === -1) {
       socket.emit("MOVE_ERROR", { message: "Cette colonne est pleine." });
       return;
     }
 
-    // Mettre à jour la grille
     room.gameState[row][col] = playerColor;
 
-    // Vérifier si le joueur a gagné
     const winner = checkWinner(room.gameState);
     if (winner) {
       io.to(roomCode).emit("UPDATE_GAME", { state: room.gameState });
       io.to(roomCode).emit("GAME_OVER", { winner });
-
       return;
     }
 
-    // Passer au joueur suivant
     nextPlayer(roomCode);
-
-    // Envoyer les mises à jour aux joueurs
     io.to(roomCode).emit("UPDATE_GAME", { state: room.gameState });
   });
 
   // Déconnexion d'un joueur
   socket.on("disconnect", () => {
-    console.log("Un joueur a quitté :", socket.id);
+    console.log(`[INFO] Un joueur a quitté : ${socket.id}`);
     for (const roomCode in rooms) {
       const room = rooms[roomCode];
-      if (room.players.includes(socket.id)) {
-        room.players = room.players.filter(player => player !== socket.id);
-        io.to(roomCode).emit("PLAYER_LEFT", { message: "Un joueur a quitté la room." });
+      if (room.players.some((player) => player.id === socket.id)) {
+        room.players = room.players.filter((player) => player.id !== socket.id);
+        io.to(roomCode).emit("PLAYER_LEFT", { message: "Un joueur a quitté." });
 
         if (room.players.length === 0) {
           delete rooms[roomCode];
