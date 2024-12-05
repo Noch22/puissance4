@@ -2,6 +2,7 @@ import React, { useState, useEffect } from "react";
 import { io } from "socket.io-client";
 import useWindowSize from "react-use/lib/useWindowSize";
 import Confetti from "react-confetti";
+import { CircleX } from "lucide-react";
 
 // Connexion au serveur WebSocket
 const socket = io(
@@ -43,6 +44,8 @@ function App() {
       socket.on("NEW_MESSAGE", handleMessages);
       socket.on("CANT_START", handleCantStart);
       socket.on("PLAYER_LEFT", handleLeft);
+      socket.on("GAME_RESTARTED", handleGameRestarted);
+      socket.on("NO_WINNER", handleNoWinner);
 
       return () => {
         socket.off("ROOM_CREATED", handleRoomCreated);
@@ -58,6 +61,8 @@ function App() {
         socket.off("NEW_MESSAGE", handleMessages);
         socket.off("CANT_START", handleCantStart);
         socket.off("PLAYER_LEFT", handleLeft);
+        socket.off("GAME_RESTARTED", handleGameRestarted);
+        socket.off("NO_WINNER", handleNoWinner);
       };
     };
     return setupSocketListeners();
@@ -148,14 +153,35 @@ function App() {
     }
   };
 
-  const popUp = (currentPlayer) => {
+  const handleReplay = () => {
+    socket.emit("RESTART_GAME", roomCode);
+  };
+
+  const handleGameRestarted = ({ message }) => {
+    setPopup(false);
+    setConfetti(false);
+    setMessages((prev) => [...prev, message]);
+    setGameStarted(true);
+  }
+
+  const handleNoWinner = ({ message }) => {
+    setMessages((prev) => [...prev, message]);
+    setPopup(true);
+  }
+
+
+  const popUp = () => {
     if (popup) {
       return (
         <div className="fixed top-0 left-0 w-full h-full bg-black bg-opacity-50 flex items-center justify-center z-50">
-          <div className="bg-white p-4 rounded-lg w-6/12 flex flex-col gap-4">
+          <div className="bg-white p-4 rounded-lg w-6/12 flex flex-col gap-4 relative">
+            <CircleX className="absolute top-2 right-2 hover:cursor-pointer" onClick={() => setPopup(!popup)} />
             <h2 className="text-3xl font-bold">Partie terminée</h2>
             <p className="text-xl">Bravo {playerTurn?.username} !</p>
-            <button onClick={() => window.location.reload()} className="bg-blue-500 p-2 rounded-lg" >Rejouer une partie</button>
+            <div className="gap-2 flex">
+              <button onClick={() => window.location.reload()} className="bg-blue-500 p-2 rounded-lg" >Revenir au menu</button>
+              <button className="bg-yellow-500 p-2 rounded-lg" onClick={handleReplay}>Rejouer une partie</button>
+            </div>
           </div>
         </div>
       );

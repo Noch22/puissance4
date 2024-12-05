@@ -144,46 +144,75 @@ io.on("connection", (socket) => {
     }
   });
 
-  // Gestion des coups joués
-  socket.on("PLAY_MOVE", ({ roomCode, col }) => {
+// Fonction utilitaire : Vérifier si toutes les colonnes sont pleines
+function checkDraw(gameState) {
+  // Si toutes les cellules de la première ligne sont non nulles, le plateau est plein
+  return gameState[0].every((cell) => cell !== null);
+}
+
+// Gestion des coups joués
+socket.on("PLAY_MOVE", ({ roomCode, col }) => {
+  const room = rooms[roomCode];
+  if (!room || !room.players.some((player) => player.id === socket.id)) {
+    socket.emit("MOVE_ERROR", { message: "Vous n'êtes pas dans cette room." });
+    return;
+  }
+
+  if (room.currentPlayer.id !== socket.id) {
+    socket.emit("MOVE_ERROR", { message: "Ce n'est pas votre tour." });
+    return;
+  }
+
+  const playerColor = room.players[0].id === socket.id ? "yellow" : "red";
+
+  let row = -1;
+  for (let r = room.gameState.length - 1; r >= 0; r--) {
+    if (room.gameState[r][col] === null) {
+      row = r;
+      break;
+    }
+  }
+
+  if (row === -1) {
+    socket.emit("MOVE_ERROR", { message: "Cette colonne est pleine." });
+    return;
+  }
+
+  room.gameState[row][col] = playerColor;
+
+  const winner = checkWinner(room.gameState);
+  if (winner) {
+    io.to(roomCode).emit("UPDATE_GAME", { state: room.gameState });
+    io.to(roomCode).emit("GAME_OVER", { winner });
+    return;
+  }
+
+  // Vérifier si le jeu est un nul (égalité)
+  if (checkDraw(room.gameState)) {
+    io.to(roomCode).emit("UPDATE_GAME", { state: room.gameState });
+    io.to(roomCode).emit("NO_WINNER", { message: "Le jeu est terminé, pas de vainqueur." });
+    return;
+  }
+
+  nextPlayer(roomCode);
+  io.to(roomCode).emit("UPDATE_GAME", { state: room.gameState });
+});
+  socket.on("RESTART_GAME", (roomCode) => {
     const room = rooms[roomCode];
     if (!room || !room.players.some((player) => player.id === socket.id)) {
-      socket.emit("MOVE_ERROR", { message: "Vous n'êtes pas dans cette room." });
+      socket.emit("RESTART_ERROR", { message: "Vous n'êtes pas dans cette room." });
       return;
     }
 
-    if (room.currentPlayer.id !== socket.id) {
-      socket.emit("MOVE_ERROR", { message: "Ce n'est pas votre tour." });
-      return;
-    }
-
-    const playerColor = room.players[0].id === socket.id ? "yellow" : "red";
-
-    let row = -1;
-    for (let r = room.gameState.length - 1; r >= 0; r--) {
-      if (room.gameState[r][col] === null) {
-        row = r;
-        break;
-      }
-    }
-
-    if (row === -1) {
-      socket.emit("MOVE_ERROR", { message: "Cette colonne est pleine." });
-      return;
-    }
-
-    room.gameState[row][col] = playerColor;
-
-    const winner = checkWinner(room.gameState);
-    if (winner) {
+    if (room.players[0].id === socket.id) {
+      room.gameState = JSON.parse(JSON.stringify(initialGameState));
+      room.currentPlayer = room.players[0];
+      io.to(roomCode).emit("GAME_RESTARTED", { message: "La partie a été redémarrée." });
       io.to(roomCode).emit("UPDATE_GAME", { state: room.gameState });
-      io.to(roomCode).emit("GAME_OVER", { winner });
-      return;
+      io.to(roomCode).emit("TURN", { currentPlayer: room.currentPlayer });
     }
-
-    nextPlayer(roomCode);
-    io.to(roomCode).emit("UPDATE_GAME", { state: room.gameState });
   });
+
 
   // Déconnexion d'un joueur
   socket.on("disconnect", () => {
