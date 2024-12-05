@@ -84,8 +84,8 @@ function checkWinner(gameState) {
 io.on("connection", (socket) => {
   console.log(`[INFO] Un joueur est connecté : ${socket.id}`);
 
-  socket.on("SEND_MESSAGE", (roomCode, message) => {
-    io.to(roomCode).emit("NEW_MESSAGE", { message: message });
+  socket.on("SEND_MESSAGE", (roomCode, message, username) => {
+    io.to(roomCode).emit("NEW_MESSAGE", { message: message, username: username });
   });
 
   // Création d'une room
