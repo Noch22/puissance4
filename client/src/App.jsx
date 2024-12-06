@@ -6,7 +6,7 @@ import { CircleX } from "lucide-react";
 
 // Connexion au serveur WebSocket
 const socket = io(
-  // "http://localhost:8080"
+  "http://localhost:8080"
 );
 
 function App() {
@@ -28,6 +28,7 @@ function App() {
   });
   const [popup, setPopup] = useState(false);
   const [playerJoined, setPlayerJoined] = useState(false);
+  const [gameEnded, setGameEnded] = useState(false);
 
   useEffect(() => {
     const setupSocketListeners = () => {
@@ -104,6 +105,7 @@ function App() {
     setMessages((prev) => [...prev, `Le joueur ${winner} a gagné !`]);
     setConfetti(true);
     setPopup(true);
+    setGameEnded(true);
   };
 
   const handleJoinError = ({ message }) => setMessages((prev) => [...prev, `Erreur : ${message}`]);
@@ -161,12 +163,14 @@ function App() {
     setPopup(false);
     setConfetti(false);
     setMessages((prev) => [...prev, message]);
+    setGameEnded(false);
     setGameStarted(true);
   }
 
   const handleNoWinner = ({ message }) => {
     setMessages((prev) => [...prev, message]);
     setPopup(true);
+    setGameEnded(true);
   }
 
 
@@ -256,6 +260,13 @@ function App() {
           <div>
             <h2>Tour de : {playerTurn?.username}</h2>
             <div className="grid grid-cols-7 gap-1">{renderGameBoard()}</div>
+
+            {gameEnded && !popup && (
+              <div className="top-2 left-2 absolute gap-2 flex">
+                <button className="bg-yellow-500 p-2 rounded-lg" onClick={() => setPopup(!popup)}>Ouvrir la popup de fin</button>
+                <button className="bg-red-400 p-2 rounded-lg" onClick={() => setConfetti(!confetti)}>{confetti ? 'Arrêter' : 'Allumer'} les confettis</button>
+              </div>
+            )}
           </div>
         )}
         <div className="absolute top-0 right-0 p-8 h-full w-1/4 bg-blue-900 overflow-scroll overflow-x-hidden">
@@ -275,7 +286,7 @@ function App() {
             ))}
           </ul>
         </div>
-      </div>
+      </div >
     </>
   );
 }
