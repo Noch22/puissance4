@@ -6,7 +6,7 @@ import { CircleX } from "lucide-react";
 
 // Connexion au serveur WebSocket
 const socket = io(
-  // "http://localhost:8080"
+  "http://localhost:8080"
 );
 
 function App() {

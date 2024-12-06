@@ -1,5 +1,20 @@
-Monorepo 
+# KingPuissance 4
+## Noah Buisson MMI3 TPDEV 👹
 
-Server folder is in client folder
+Commands for deploying 
 
-Using for deploy on render
+###### Client side :
+```
+cd client
+npm install
+npm run dev
+```
+
+###### Server side :
+When on client folder
+```
+cd server
+npm install 
+node or nodemon server.js
+```
+✅ Actually depolyed on Render : puissance4-d5rn.onrender.com
